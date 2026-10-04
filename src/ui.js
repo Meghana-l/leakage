@@ -217,7 +217,7 @@ const AI = [
   {kind:'Prediction model', c:'p-go', name:'Smart recovery', what:'Scores every way to recover a failed payment and picks the best order to try them.', tech:'Scores each option from the decline reason, payment method, and rider history. Here it is a hand-tuned scoring table; with real data it becomes a trained model (gradient-boosted trees).'},
   {kind:'Rules engine', c:'p-n', name:'Money matching', what:'Compares every charge with what each provider actually paid and names the problem.', tech:'Deterministic matching with tolerances (for example, rounding under 10 cents). Rules, not a language model, because money records must be exact and repeatable.'},
   {kind:'Risk scoring', c:'p-go', name:'Collections priority', what:'Ranks unpaid accounts by how much money is likely lost if nobody acts.', tech:'Amount times the chance it stays unpaid times how late it is. Disputes and fraud skip the queue and go to a person.'},
-  {kind:'Language model', c:'p-ok', name:'Assistant and messages', what:'Answers questions about the week and writes friendly reminder messages.', tech:'A language model with tool calling (Claude inside Claude, Llama on Groq on the web). It can only read data through five lookup tools and suggest actions through one. It never moves money.'},
+  {kind:'Language model', c:'p-ok', name:'Assistant and messages', what:'Answers questions about the week and writes friendly reminder messages.', tech:'A language model with tool calling (Claude inside Claude, an open model on Groq on the web). It can only read data through five lookup tools and suggest actions through one. It never moves money.'},
   {kind:'Safety layer', c:'p-warn', name:'Guardrails and approval', what:'Stops unsafe actions and sends risky ones to a person.', tech:'Hard rules checked on every action: no retries on dead or stolen cards, at most 3 attempts, refunds over $100 and write-offs over $25 need approval.'},
   {kind:'Testing', c:'p-n', name:'Evals', what:'A fixed set of tricky cases the logic must pass before any change ships.', tech:`${18} golden cases covering recovery, matching, and safety rules. Run them below.`},
 ];
@@ -247,7 +247,7 @@ const STARTERS = [
   {q:'Explain the double charges and suggest fixes', s:'Mismatch walkthrough'},
   {q:'Retry the biggest payment from a stolen card', s:'See the safety rules work'},
 ];
-function errText(e){ return ({not_granted:'AI access was turned off for this page.', rate_limited:'Lots of requests right now. Try again in a minute.', cancelled:'Stopped.'})[e?.code] || 'The assistant could not answer that. Please try again.'; }
+function errText(e){ return ({not_granted:'AI access was turned off for this page.', rate_limited:'Lots of requests right now. Try again in a minute.', cancelled:'Stopped.'})[e?.code] || ('The assistant could not answer that. Please try again.' + (e?.detail ? '\n\nDetails: '+e.detail : '')); }
 function bubble(cls, text, before){ const d=document.createElement('div'); d.className=cls; d.textContent=text; const chat=$('#chat'); before?chat.insertBefore(d,before):chat.appendChild(d); chat.scrollTop=chat.scrollHeight; return d; }
 function welcome(){
   $('#chat').innerHTML='';
@@ -279,9 +279,10 @@ async function groqSample(input, opts={}){
     let r;
     try{ r = await fetch('/api/chat',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({messages:msgs, tools:toolDefs}), signal:opts.signal}); }
     catch(e){ throw {code: e.name==='AbortError'?'cancelled':'error'}; }
+    let j = {}; try{ j = await r.json(); }catch(e){}
     if(r.status===429) throw {code:'rate_limited'};
-    if(!r.ok) throw {code:'error'};
-    const m = (await r.json()).message || {};
+    if(!r.ok) throw {code:'error', detail: j.error || ('HTTP '+r.status)};
+    const m = j.message || {};
     if(m.tool_calls && m.tool_calls.length){
       msgs.push({role:'assistant', content:m.content||'', tool_calls:m.tool_calls});
       for(const tc of m.tool_calls){
@@ -318,7 +319,7 @@ renderAI(); build(); welcome();
 (async()=>{
   sampleFn = await connectAssistant();
   cpReady=true;
-  $('#cpstatus').textContent = sampleFn ? (cpBackend==='Claude' ? 'Online, powered by Claude' : 'Online, powered by Llama on Groq') : 'Not connected';
+  $('#cpstatus').textContent = sampleFn ? (cpBackend==='Claude' ? 'Online, powered by Claude' : 'Online, powered by Groq') : 'Not connected';
   $('#send').disabled = !sampleFn; $('#askbox').disabled = !sampleFn;
   welcome(); if(segK==='unpaid') renderFix();
 })();
