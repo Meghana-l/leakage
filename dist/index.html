@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leakage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F8FC; --card:#FFFFFF; --ink:#1E2940; --muted:#69738A; --faint:#98A1B3; --line:#E5E9F1; --soft:#F0F3F9;
+  --blue:#3866F0; --blue-soft:#EAF0FF; --green:#139E6B; --green-soft:#E3F6EE; --coral:#E8573F; --coral-soft:#FDEDEA; --amber:#B7790F; --amber-soft:#FDF3DF;
+  --font:'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px);scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.55;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-0.015em}
+h1{font-size:clamp(28px,4.2vw,42px);line-height:1.15}
+h2{font-size:24px;line-height:1.25}
+h3{font-size:17px;line-height:1.3}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:14px} .tiny{font-size:13px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:9px 16px;font-weight:500}
+button:hover{border-color:var(--faint)}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+button.primary:hover{background:#2C57D9}
+button.ghost{border-color:transparent;background:transparent;color:var(--blue);padding:6px 8px}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid #9DB4FA;outline-offset:2px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+/* nav */
+nav.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:rgba(246,248,252,.92);backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
+.brand .drop{width:26px;height:26px}
+.navlinks{display:flex;gap:4px;margin-left:auto;overflow-x:auto}
+.navlinks a{color:var(--muted);text-decoration:none;font-size:15px;padding:6px 10px;border-radius:8px;white-space:nowrap}
+.navlinks a:hover{background:var(--soft);color:var(--ink)}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--coral);color:#fff;font-size:12px;font-weight:700;margin-left:4px}
+.badge[hidden]{display:none}
+@media (max-width:760px){ .navlinks a.hide-sm{display:none} }
+section.block{padding:56px 0 8px}
+.sec-head{margin-bottom:22px;max-width:640px}
+.sec-head p{margin-top:6px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px}
+/* hero */
+.hero{padding:44px 0 0}
+.weekline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-bottom:14px}
+.weekline select{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:4px 8px;font-size:14px}
+.hero h1 .amt-leak{color:var(--coral)}
+.hero h1 .amt-ok{color:var(--green)}
+.hero .sub{margin-top:12px;font-size:18px;color:var(--muted);max-width:640px}
+.flow{margin-top:28px;padding:22px 24px}
+.flowbar{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--soft)}
+.flowbar span{display:block;height:100%}
+.flowlegend{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:14px;font-size:14px;color:var(--muted)}
+.flowlegend b{color:var(--ink);font-weight:700}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:0}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+@media (max-width:860px){ .three{grid-template-columns:1fr} }
+.leak{padding:22px;display:flex;flex-direction:column;gap:10px}
+.leak .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center}
+.leak .num{font-size:30px;font-weight:700;line-height:1.1}
+.leak .what{font-size:15px;color:var(--muted);flex:1}
+.leak .good{font-size:14px;font-weight:500;color:var(--green)}
+.leak button{align-self:flex-start;margin-top:4px}
+/* story */
+.story{padding:24px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border-radius:999px;padding:7px 14px;font-size:14px;background:var(--card)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.storyline{display:flex;gap:0;margin-top:26px;overflow-x:auto;padding-bottom:6px}
+.st{flex:1 0 150px;position:relative;padding-right:14px}
+.st::before{content:"";position:absolute;top:15px;left:34px;right:4px;height:2px;background:var(--line)}
+.st:last-child::before{display:none}
+.st .c{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:1;font-size:15px;font-weight:700}
+.st .c.ok{background:var(--green-soft);color:var(--green)}
+.st .c.bad{background:var(--coral-soft);color:var(--coral)}
+.st .c.go{background:var(--blue-soft);color:var(--blue)}
+.st .c.n{background:var(--soft);color:var(--muted)}
+.st .t{margin-top:10px;font-weight:700;font-size:15px}
+.st .d{font-size:14px;color:var(--muted);margin-top:2px}
+@media (prefers-reduced-motion: no-preference){ .st{animation:up .35s ease both} @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}} }
+.storynote{margin-top:18px;padding:12px 16px;border-radius:12px;background:var(--soft);font-size:15px}
+/* workspace */
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;flex-wrap:wrap}
+.seg button{border:0;border-radius:10px;padding:8px 16px;background:transparent;color:var(--muted)}
+.seg button[aria-selected="true"]{background:var(--ink);color:#fff}
+.ws{display:grid;grid-template-columns:320px 1fr;gap:20px;margin-top:18px;align-items:start}
+@media (max-width:860px){ .ws{grid-template-columns:1fr} }
+.groups{display:grid;gap:10px}
+.group{all:unset;box-sizing:border-box;cursor:pointer;display:block;padding:14px 16px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.group:hover{border-color:var(--faint)}
+.group[aria-pressed="true"]{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+.group:focus-visible{outline:3px solid #9DB4FA;outline-offset:2px}
+.group .gt{display:flex;justify-content:space-between;gap:10px;font-weight:700}
+.group .gs{font-size:14px;color:var(--muted);margin-top:2px}
+.group .gm{display:flex;gap:12px;font-size:13px;margin-top:8px;color:var(--muted)}
+.panel{padding:22px}
+.panel .ph{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.howto{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--blue-soft);color:#24438F;font-size:15px}
+.items{margin-top:16px;display:grid;gap:8px}
+.item{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.item > button{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:12px 14px}
+.item > button:hover{background:var(--soft)}
+.item > button:focus-visible{outline:3px solid #9DB4FA;outline-offset:-3px}
+.item .it{font-weight:500}
+.item .is{font-size:13px;color:var(--muted)}
+.item .amt{font-weight:700;text-align:right;white-space:nowrap}
+.item .chev{color:var(--faint);transition:transform .2s}
+.item.open .chev{transform:rotate(90deg)}
+.item .body{padding:4px 16px 16px;border-top:1px solid var(--line);background:#FBFCFE}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.p-ok{background:var(--green-soft);color:var(--green)} .p-bad{background:var(--coral-soft);color:var(--coral)} .p-go{background:var(--blue-soft);color:var(--blue)} .p-warn{background:var(--amber-soft);color:var(--amber)} .p-n{background:var(--soft);color:var(--muted)}
+.steps{display:grid;gap:8px;margin:14px 0 10px}
+.step{display:flex;gap:10px;align-items:center;font-size:15px}
+.step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.facts{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:14px;color:var(--muted);margin-top:12px}
+.facts b{color:var(--ink);font-weight:500}
+.msg{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;margin-top:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{font-size:14px;color:var(--muted);margin-top:8px}
+.more{margin-top:10px}
+/* copilot */
+.cp{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+@media (max-width:860px){ .cp{grid-template-columns:1fr} }
+.chatcard{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:460px}
+.chathead{display:flex;gap:12px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.avatar{width:38px;height:38px;border-radius:12px;background:var(--blue-soft);display:grid;place-items:center;flex:none}
+.chat{flex:1;padding:20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:520px}
+.b{max-width:82%;padding:11px 15px;border-radius:16px;white-space:pre-wrap;font-size:15px}
+.b.me{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:6px}
+.b.ai{align-self:flex-start;background:var(--soft);border-bottom-left-radius:6px}
+.tool{align-self:flex-start;font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.tool::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.starters{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:560px){ .starters{grid-template-columns:1fr} }
+.starters button{text-align:left;font-weight:400;font-size:15px;border-radius:14px;padding:12px 14px}
+.starters button span{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.composer{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--line)}
+.composer input{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--bg)}
+.waiting{padding:18px}
+.wa{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:10px}
+.wa .wt{font-weight:700;font-size:15px}
+/* AI explainer */
+.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:860px){ .ai-grid{grid-template-columns:1fr} }
+.aic{padding:20px}
+.aic .kind{display:inline-block;margin-bottom:10px}
+.aic p{font-size:15px;color:var(--muted);margin-top:6px}
+.aic .tech{font-size:13px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted)}
+details.under{margin-top:14px}
+details.under summary{cursor:pointer;font-weight:700;padding:16px 20px;list-style:none}
+details.under summary::-webkit-details-marker{display:none}
+details.under summary::after{content:"+";float:right;color:var(--faint);font-weight:400}
+details.under[open] summary::after{content:"–"}
+details.under .in{padding:0 20px 20px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500}
+.tw{overflow-x:auto}
+footer{padding:48px 0 64px;font-size:14px;color:var(--muted);max-width:720px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<nav class="top" aria-label="Sections">
+  <div class="wrap">
+    <div class="brand"><svg class="drop" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.6 4.6-6.5 8.2-6.5 11.6a6.5 6.5 0 0 0 13 0c0-3.4-2.9-7-6.5-11.6z" fill="#3866F0"/><path d="M9 14.5a3 3 0 0 0 3 3" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Leakage</div>
+    <div class="navlinks">
+      <a href="#overview" class="hide-sm">Overview</a>
+      <a href="#story" class="hide-sm">One payment</a>
+      <a href="#fix">Fix issues</a>
+      <a href="#ask">Ask Leakage<span class="badge" id="navbadge" hidden>0</span></a>
+      <a href="#ai" class="hide-sm">How the AI works</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="hero" id="overview">
+    <div class="weekline"><span>Simulated week of Sep 28 to Oct 4, 2026</span>
+      <select id="vol" aria-label="Number of payments"><option value="2000">2,000 payments</option><option value="10000" selected>10,000 payments</option><option value="40000">40,000 payments</option></select>
+      <button class="ghost" id="regen">Try a new week</button></div>
+    <h1 id="headline"></h1>
+    <p class="sub" id="subline"></p>
+    <div class="card flow"><div class="flowbar" id="flowbar"></div><div class="flowlegend" id="flowlegend"></div></div>
+    <div class="three" id="leaks"></div>
+  </section>
+
+  <section class="block" id="story">
+    <div class="sec-head"><h2>Follow one payment</h2><p>Robotaxi rides and charging are paid for after the service. Pick a story to see what can go wrong and what Leakage does about it.</p></div>
+    <div class="card story">
+      <div class="chips" id="storychips" role="group" aria-label="Pick a story"></div>
+      <div class="storyline" id="storyline"></div>
+      <p class="storynote" id="storynote"></p>
+    </div>
+  </section>
+
+  <section class="block" id="fix">
+    <div class="sec-head"><h2>Fix issues</h2><p>Issues are grouped by cause, so you pick a group first, then open any payment to see what happened and what to do.</p></div>
+    <div class="seg" role="tablist" id="seg">
+      <button role="tab" data-k="failed" aria-selected="true">Failed payments</button>
+      <button role="tab" data-k="unpaid" aria-selected="false">Unpaid accounts</button>
+      <button role="tab" data-k="mismatch" aria-selected="false">Money mismatches</button>
+    </div>
+    <div class="ws">
+      <div class="groups" id="groups"></div>
+      <div class="card panel" id="panel"></div>
+    </div>
+  </section>
+
+  <section class="block" id="ask">
+    <div class="sec-head"><h2>Ask Leakage</h2><p>An assistant that looks up this week's payments for you and suggests fixes. It never moves money on its own: anything it suggests waits for your OK.</p></div>
+    <div class="cp">
+      <div class="card chatcard">
+        <div class="chathead"><div class="avatar"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.6 4.6-6.5 8.2-6.5 11.6a6.5 6.5 0 0 0 13 0c0-3.4-2.9-7-6.5-11.6z" fill="#3866F0"/></svg></div>
+          <div><div style="font-weight:700">Leakage assistant</div><div class="tiny muted" id="cpstatus">Connecting...</div></div></div>
+        <div class="chat" id="chat" aria-live="polite"></div>
+        <div class="composer"><input id="askbox" placeholder="Ask anything about this week's payments" aria-label="Your question"><button class="primary" id="send">Ask</button><button id="stop" hidden>Stop</button></div>
+      </div>
+      <div class="card waiting">
+        <h3>Waiting for your OK</h3>
+        <p class="small muted" style="margin-top:4px">Suggestions from the assistant and the agents land here.</p>
+        <div id="waitlist"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="ai">
+    <div class="sec-head"><h2>How the AI works</h2><p>Each part uses the simplest tool that does the job well. The language model talks; the money decisions come from scoring, rules, and tests you can check.</p></div>
+    <div class="ai-grid" id="aigrid"></div>
+    <details class="card under"><summary>Tests the decision logic must pass</summary><div class="in"><p class="small muted" id="evsum"></p><div class="tw"><table><thead><tr><th>Case</th><th>Leakage</th><th>Plain retries</th></tr></thead><tbody id="evbody"></tbody></table></div></div></details>
+    <details class="card under"><summary>Activity log</summary><div class="in"><div class="tw"><table><tbody id="audit"></tbody></table></div></div></details>
+  </section>
+
+  <footer>Everything here is simulated: payments, riders, partners, and providers. Payment methods are modeled on what Tesla shows publicly (Robotaxi app, Tesla wallet, Supercharger kiosks, partner charge cards). Nothing reflects Tesla internal data. A prototype built to show one way to approach this problem.</footer>
+</main>
+
+<script>
+// ===== Leakage core engine (pure logic, no DOM) =====
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function pickW(rng, items){ let r=rng()*items.reduce((s,i)=>s+i[1],0); for(const [v,w] of items){ if((r-=w)<=0) return v; } return items[items.length-1][0]; }
+const round2 = x => Math.round(x*100)/100;
+
+const MARKETS = {
+  AUS:{city:'Austin', cur:'USD', fx:1, robotaxi:true},
+  SFO:{city:'Bay Area', cur:'USD', fx:1, robotaxi:true},
+  BER:{city:'Berlin', cur:'EUR', fx:1.08},
+  OSL:{city:'Oslo', cur:'NOK', fx:0.094},
+  LON:{city:'London', cur:'GBP', fx:1.27},
+  TOR:{city:'Toronto', cur:'CAD', fx:0.73},
+};
+const PRODUCTS = {
+  ride:{label:'Robotaxi ride'}, charging:{label:'Supercharging'},
+  subscription:{label:'Subscription'}, service:{label:'Service invoice'}
+};
+const RAILS = {
+  card:{label:'Saved card', provider:'Card processor', fee:0.029, fixed:0.30, decline:0.060},
+  apple_pay:{label:'Apple Pay', provider:'Card processor', fee:0.029, fixed:0.30, decline:0.030},
+  google_pay:{label:'Google Pay', provider:'Card processor', fee:0.029, fixed:0.30, decline:0.035},
+  x_money:{label:'X Money', provider:'X Money', fee:0.015, fixed:0, decline:0.050},
+  kiosk:{label:'V4 kiosk', provider:'Kiosk acquirer', fee:0.032, fixed:0.10, decline:0.040},
+  partner_card:{label:'Partner charge card', provider:'Partner network', fee:0.010, fixed:0, decline:0.020},
+  tesla_credit:{label:'Tesla credits', provider:'Internal', fee:0, fixed:0, decline:0.006},
+};
+const CODES = {
+  '51':{label:'Insufficient funds', kind:'soft'},
+  '05':{label:'Do not honor', kind:'soft'},
+  '91':{label:'Issuer unavailable', kind:'soft'},
+  '61':{label:'Exceeds spending limit', kind:'soft'},
+  'BAL':{label:'Wallet balance too low', kind:'soft'},
+  '54':{label:'Expired card', kind:'hard_update'},
+  '14':{label:'Invalid card number', kind:'hard_update'},
+  'TK':{label:'Wallet token suspended', kind:'hard_update'},
+  '41':{label:'Lost card', kind:'hard_fraud'},
+  '43':{label:'Stolen card', kind:'hard_fraud'},
+};
+const ACTIONS = {
+  retry_now:{label:'Retry immediately'},
+  retry_1h:{label:'Retry in 1 hour'},
+  retry_24h:{label:'Retry in 24 hours'},
+  retry_payday:{label:'Retry on payday morning'},
+  switch_backup:{label:'Charge backup method in wallet'},
+  message_update:{label:'Ask rider to update payment method'},
+  message_pay:{label:'Send in-app pay link'},
+  message_topup:{label:'Ask rider to top up wallet'},
+};
+const isRetry = a => a.startsWith('retry');
+const PARTNERS = ['RoamLink','VoltCard EU','FleetPay Pro','ChargeNet Fleet'];
+const WEEK_START = Date.UTC(2026,8,28); // Mon Sep 28 2026
+const DAY = 86400000;
+const AS_OF = WEEK_START + 7*DAY; // Oct 5 00:00 UTC, file cut
+
+function declineCodeFor(rng, rail){
+  if(rail==='tesla_credit') return 'BAL';
+  if(rail==='x_money') return pickW(rng,[['BAL',.45],['05',.25],['91',.15],['41',.05],['61',.10]]);
+  const base=[['51',.34],['05',.22],['91',.10],['61',.08],['54',.12],['14',.03],['41',.02],['43',.01]];
+  if(rail==='apple_pay'||rail==='google_pay') base.push(['TK',.08]);
+  return pickW(rng, base);
+}
+
+function generate(opts={}){
+  const n = opts.count||10000, seed = opts.seed||2026;
+  const rng = mulberry32(seed);
+  const customers = [];
+  const nCust = Math.max(200, Math.round(n/6));
+  for(let i=0;i<nCust;i++){
+    customers.push({ id:'C-'+(10000+i), tenure: Math.floor(rng()*60)+1,
+      onTime: round2(0.55+rng()*0.45), hasBackup: rng()<0.45,
+      payday: pickW(rng,[[5,.6],[1,.15],[3,.15],[4,.1]]) });
+  }
+  const mkeys = Object.keys(MARKETS);
+  const txns = [];
+  for(let i=0;i<n;i++){
+    const product = pickW(rng,[['ride',.42],['charging',.40],['subscription',.12],['service',.06]]);
+    let market = product==='ride' ? pickW(rng,[['AUS',.6],['SFO',.4]]) : pickW(rng,mkeys.map(k=>[k, k==='AUS'||k==='SFO'?.22:.14]));
+    const m = MARKETS[market];
+    let rail;
+    if(product==='ride') rail = pickW(rng,[['card',.55],['apple_pay',.25],['google_pay',.12],['x_money',.08]]);
+    else if(product==='charging') rail = pickW(rng,[['card',.55],['apple_pay',.10],['google_pay',.05],['kiosk',.12],['partner_card',.13],['tesla_credit',.05]]);
+    else if(product==='subscription') rail = pickW(rng,[['card',.8],['apple_pay',.1],['tesla_credit',.1]]);
+    else rail = pickW(rng,[['card',.8],['apple_pay',.2]]);
+    let usd;
+    if(product==='ride') usd = 8+rng()*37;
+    else if(product==='charging') usd = 12+rng()*48;
+    else if(product==='subscription') usd = rng()<.6?9.99:99;
+    else usd = 80+Math.pow(rng(),2)*820;
+    const amount = round2(usd/m.fx);
+    const cust = customers[Math.floor(rng()*customers.length)];
+    const ts = WEEK_START + Math.floor(rng()*7*DAY);
+    const declined = rng() < RAILS[rail].decline * (cust.onTime<0.7?1.6:1);
+    const t = { id:'T-'+(500000+i), ref:'R'+(900000+i), product, market, rail, amount, cur:m.cur,
+      usd: round2(usd), customer: cust.id, ts, status: declined?'declined':'approved' };
+    if(rail==='partner_card') t.partner = PARTNERS[Math.floor(rng()*PARTNERS.length)];
+    if(declined) t.code = declineCodeFor(rng, rail);
+    txns.push(t);
+  }
+  return { seed, customers, custById: Object.fromEntries(customers.map(c=>[c.id,c])), txns };
+}
+
+// ---- hidden "real world" response, used only to simulate outcomes ----
+function trueProb(t, c, action){
+  const k = CODES[t.code].kind, code=t.code, ot=c.onTime;
+  if(isRetry(action) && k!=='soft') return 0;
+  if(action==='switch_backup') return c.hasBackup ? (k==='hard_fraud'?0.4:0.68) : 0;
+  const T = {
+    '51':{retry_now:.12, retry_1h:.15, retry_24h:.30, retry_payday:.62*ot/0.8, message_pay:.45},
+    '05':{retry_now:.08, retry_1h:.12, retry_24h:.38, retry_payday:.30, message_pay:.40},
+    '91':{retry_now:.55, retry_1h:.85, retry_24h:.80, retry_payday:.75, message_pay:.35},
+    '61':{retry_now:.10, retry_1h:.12, retry_24h:.55, retry_payday:.50, message_pay:.42},
+    'BAL':{retry_now:.05, retry_1h:.06, retry_24h:.25, retry_payday:.50, message_topup:.60, message_pay:.40},
+    '54':{message_update:.55, message_pay:.45}, '14':{message_update:.50, message_pay:.40},
+    'TK':{message_update:.60, message_pay:.45},
+    '41':{message_update:.20, message_pay:.15}, '43':{message_update:.15, message_pay:.10},
+  }[code];
+  return Math.min(0.9, 0.8*(T[action]||0.02) * (0.6+0.5*ot));
+}
+
+// ---- our policy: an estimated model (approximates the world, not a copy) ----
+function estProb(t, c, action){
+  const k = CODES[t.code].kind;
+  if(isRetry(action) && k!=='soft') return 0;
+  if(action==='switch_backup') return c.hasBackup ? (k==='hard_fraud'?0.45:0.76) : 0;
+  const E = {
+    '51':{retry_now:.10, retry_1h:.14, retry_24h:.28, retry_payday:.58, message_pay:.42},
+    '05':{retry_now:.10, retry_1h:.12, retry_24h:.35, retry_payday:.28, message_pay:.38},
+    '91':{retry_now:.50, retry_1h:.82, retry_24h:.78, retry_payday:.70, message_pay:.30},
+    '61':{retry_now:.10, retry_1h:.12, retry_24h:.50, retry_payday:.46, message_pay:.40},
+    'BAL':{retry_now:.05, retry_1h:.05, retry_24h:.22, retry_payday:.46, message_topup:.57, message_pay:.38},
+    '54':{message_update:.52, message_pay:.42}, '14':{message_update:.48, message_pay:.38},
+    'TK':{message_update:.57, message_pay:.42},
+    '41':{message_update:.18, message_pay:.12}, '43':{message_update:.14, message_pay:.10},
+  }[t.code];
+  return round2((E[action]||0.02) * (0.62+0.48*c.onTime));
+}
+
+const MAX_ATTEMPTS = 3;
+function recoveryPlan(t, c){
+  const kind = CODES[t.code].kind;
+  const cands = Object.keys(ACTIONS).map(a=>({action:a, p:estProb(t,c,a)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
+  const plan=[]; const used=new Set(); let retries=0;
+  for(const cd of cands){
+    if(plan.length>=MAX_ATTEMPTS) break;
+    if(isRetry(cd.action)){ if(retries>=1) continue; retries++; }
+    if(cd.action.startsWith('message') && plan.some(s=>s.action.startsWith('message'))) continue;
+    if(used.has(cd.action)) continue;
+    used.add(cd.action); plan.push(cd);
+  }
+  // order: issuer-side fixes before bothering the rider
+  plan.sort((a,b)=> (a.action.startsWith('message')?1:0)-(b.action.startsWith('message')?1:0) || b.p-a.p);
+  const pAll = 1-plan.reduce((s,x)=>s*(1-x.p),1);
+  const reasons = {
+    soft: 'Soft decline: the card is valid, so timing matters more than the method.',
+    hard_update: 'Hard decline: retrying the same credential cannot succeed and breaks card-network retry rules.',
+    hard_fraud: 'Card reported lost or stolen: never retry, flag for risk review, and only use a different method.'
+  };
+  return { plan, pRecover: round2(pAll), kind, fraudFlag: kind==='hard_fraud', reason: reasons[kind] };
+}
+
+function naivePlan(t){ return { plan:[{action:'retry_now'},{action:'retry_now'},{action:'retry_now'}] }; }
+
+function simulateRecovery(data, seed){
+  const rng = mulberry32((seed||data.seed)+7);
+  const rngN = mulberry32((seed||data.seed)+11);
+  const out=[];
+  for(const t of data.txns){
+    if(t.status!=='declined') continue;
+    const c = data.custById[t.customer];
+    const rp = recoveryPlan(t,c);
+    let recoveredBy=null, steps=[];
+    for(const s of rp.plan){
+      const ok = rng() < trueProb(t,c,s.action);
+      steps.push({action:s.action, p:s.p, ok});
+      if(ok){ recoveredBy=s.action; break; }
+    }
+    // naive baseline: 3 immediate retries, hard declines count as rule violations
+    let naiveOk=false, violations=0;
+    for(let i=0;i<3;i++){
+      const p = trueProb(t,c,'retry_now');
+      if(CODES[t.code].kind!=='soft') violations++;
+      if(rngN()<p){ naiveOk=true; break; }
+    }
+    out.push({ txn:t.id, ...rp, steps, recovered: !!recoveredBy, recoveredBy, naiveOk, naiveViolations: violations });
+  }
+  return out;
+}
+
+// ---- reconciliation ----
+const FX_TOLERANCE_USD = 0.10;
+function buildSettlements(data, recovery){
+  const rng = mulberry32(data.seed+23);
+  const recoveredIds = new Set(recovery.filter(r=>r.recovered).map(r=>r.txn));
+  const rows=[]; const injected={};
+  let sid=1;
+  for(const t of data.txns){
+    const collected = t.status==='approved' || recoveredIds.has(t.id);
+    if(!collected || t.rail==='tesla_credit') continue;
+    const r = RAILS[t.rail];
+    const settleTs = t.ts + DAY*(1+Math.floor(rng()*2));
+    const fee = round2(t.amount*r.fee + r.fixed/MARKETS[t.market].fx);
+    const base = { sid:'S-'+(sid++), ref:t.ref, provider: t.partner||r.provider, gross:t.amount, fee, cur:t.cur, settledTs:settleTs };
+    const x = rng();
+    const nonUsd = t.cur!=='USD';
+    if(x<0.010 && t.ts < AS_OF-3*DAY){ injected[t.ref]='missing'; continue; }
+    if(x<0.014){ injected[t.ref]='duplicate'; rows.push(base); rows.push({...base, sid:'S-'+(sid++), settledTs:settleTs+3600000}); continue; }
+    if(x<0.020){ injected[t.ref]='amount_mismatch'; const d = round2(t.amount*(0.1+rng()*0.4)); rows.push({...base, gross: round2(t.amount-d)}); continue; }
+    if(x<0.026 && nonUsd){ injected[t.ref]='fx_rounding'; rows.push({...base, gross: round2(t.amount + (rng()<.5?-1:1)*(0.01+Math.floor(rng()*4)/100))}); continue; }
+    if(x<0.031){ injected[t.ref]='fee_overcharge'; rows.push({...base, fee: round2(fee + t.amount*(0.008+rng()*0.012))}); continue; }
+    rows.push(base);
+  }
+  // orphans: kiosk sessions that settled but never reached the ledger
+  const nOrph = Math.max(2, Math.round(data.txns.length*0.0015));
+  for(let i=0;i<nOrph;i++){
+    const amt = round2(15+rng()*40);
+    const ref='K'+(700000+i);
+    injected[ref]='orphan';
+    rows.push({ sid:'S-'+(sid++), ref, provider:'Kiosk acquirer', gross:amt, fee: round2(amt*0.032+0.10), cur:'USD', settledTs: WEEK_START+Math.floor(rng()*7*DAY) });
+  }
+  return { rows, injected };
+}
+
+function classifyBreaks(ledger, rows, asOf){
+  // ledger: [{ref, amount, cur, rail, ts, market, collected}] ; rows: settlement rows
+  const fxOf = c => ({USD:1,EUR:1.08,NOK:0.094,GBP:1.27,CAD:0.73})[c]||1;
+  const byRef = {}; for(const r of rows){ (byRef[r.ref] ||= []).push(r); }
+  const breaks=[]; let matched=0;
+  const ledgerRefs = new Set();
+  for(const l of ledger){
+    if(!l.collected || l.rail==='tesla_credit') continue;
+    ledgerRefs.add(l.ref);
+    const s = byRef[l.ref]||[];
+    const usd = v => v*fxOf(l.cur);
+    if(s.length===0){
+      if(asOf - l.ts > 3*DAY) breaks.push({ref:l.ref, type:'missing', ledgerAmt:l.amount, settledAmt:0, cur:l.cur, diffUsd: round2(usd(l.amount))});
+      continue;
+    }
+    if(s.length>1){ breaks.push({ref:l.ref, type:'duplicate', ledgerAmt:l.amount, settledAmt: round2(s.reduce((a,b)=>a+b.gross,0)), cur:l.cur, diffUsd: round2(usd(l.amount*(s.length-1))), rows:s.map(x=>x.sid)}); continue; }
+    const r = s[0];
+    const d = round2(r.gross - l.amount);
+    if(d!==0){
+      const dUsd = Math.abs(usd(d));
+      if(l.cur!=='USD' && dUsd <= FX_TOLERANCE_USD) breaks.push({ref:l.ref, type:'fx_rounding', ledgerAmt:l.amount, settledAmt:r.gross, cur:l.cur, diffUsd: round2(dUsd)});
+      else breaks.push({ref:l.ref, type:'amount_mismatch', ledgerAmt:l.amount, settledAmt:r.gross, cur:l.cur, diffUsd: round2(dUsd)});
+      continue;
+    }
+    const rail = RAILS[l.rail]; const expected = round2(l.amount*rail.fee + rail.fixed/fxOf(l.cur));
+    if(r.fee - expected > Math.max(0.02, l.amount*0.003)){ breaks.push({ref:l.ref, type:'fee_overcharge', ledgerAmt:l.amount, settledAmt:r.gross, cur:l.cur, feeCharged:r.fee, feeExpected:expected, diffUsd: round2(usd(r.fee-expected))}); continue; }
+    matched++;
+  }
+  for(const ref in byRef){ if(!ledgerRefs.has(ref)){ const r=byRef[ref][0]; breaks.push({ref, type:'orphan', ledgerAmt:0, settledAmt:r.gross, cur:r.cur, diffUsd: round2(r.gross*fxOf(r.cur)), provider:r.provider}); } }
+  return { breaks: breaks.map(enrichBreak), matched };
+}
+
+const BREAK_INFO = {
+  missing:{label:'Missing settlement', fix:'Open a trace with the provider; if not found in 5 days, re-present the charge.', conf:.86},
+  duplicate:{label:'Duplicate settlement', fix:'Refund the extra charge to the customer and claim it back from the provider.', conf:.97},
+  amount_mismatch:{label:'Amount mismatch', fix:'Check for a fare or session adjustment after capture; correct the ledger or bill the difference.', conf:.78},
+  fx_rounding:{label:'Currency rounding', fix:'Write off automatically: within the $0.10 rounding tolerance.', conf:.99},
+  fee_overcharge:{label:'Fee above contract', fix:'Flag to the provider for a fee credit under the contracted rate.', conf:.92},
+  orphan:{label:'Settlement with no ledger entry', fix:'Likely a kiosk session that never synced. Create the ledger entry and link the receipt.', conf:.81},
+};
+function enrichBreak(b){
+  const info = BREAK_INFO[b.type];
+  const auto = b.type==='fx_rounding';
+  const why = {
+    missing:`We charged ${fmt(b.ledgerAmt,b.cur)} but no money from the provider has arrived after 3 days.`,
+    duplicate:`The provider settled ${fmt(b.ledgerAmt,b.cur)} twice for one charge. The customer was likely billed twice.`,
+    amount_mismatch:`We recorded ${fmt(b.ledgerAmt,b.cur)} but ${fmt(b.settledAmt,b.cur)} settled.`,
+    fx_rounding:`A ${fmt(Math.abs(b.settledAmt-b.ledgerAmt),b.cur)} difference from currency rounding.`,
+    fee_overcharge:`The provider took ${fmt(b.feeCharged,b.cur)} in fees; the contract says ${fmt(b.feeExpected,b.cur)}.`,
+    orphan:`${fmt(b.settledAmt,b.cur)} arrived from ${b.provider||'a provider'} with no matching charge in our ledger.`,
+  }[b.type];
+  return { ...b, label:info.label, fix:info.fix, confidence:info.conf, autoResolve:auto, explanation:why, status: auto?'auto_resolved':'needs_review' };
+}
+function fmt(v,cur){ const sym={USD:'$',EUR:'€',GBP:'£',CAD:'C$',NOK:'kr '}[cur]||''; return sym+Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ---- collections ----
+function buildCollections(data, recovery){
+  const rng = mulberry32(data.seed+31);
+  const items=[];
+  const txById = Object.fromEntries(data.txns.map(t=>[t.id,t]));
+  for(const r of recovery){
+    if(r.recovered) continue;
+    const t = txById[r.txn], c = data.custById[t.customer];
+    const pSelfCure = round2(0.15 + 0.5*c.onTime*(r.kind==='soft'?1:0.6));
+    const dispute = rng()<0.07;
+    items.push({ id:'COL-'+t.id.slice(2), kind:'consumer', txn:t.id, customer:t.customer, product:t.product, market:t.market,
+      amount:t.amount, cur:t.cur, usd:t.usd, daysPastDue: Math.max(1, Math.floor((AS_OF-t.ts)/DAY)), pSelfCure, dispute,
+      fraud: r.fraudFlag });
+  }
+  // B2B partner receivables: last month's partner charge-card sessions, net-30
+  for(const p of PARTNERS){
+    for(let k=0;k<2;k++){
+      const usd = round2(8000+rng()*42000);
+      const dpd = Math.floor(rng()*70);
+      items.push({ id:`COL-${p.replace(/\W/g,'').slice(0,6).toUpperCase()}-${k+1}`, kind:'partner', partner:p, product:'charging', market: p==='VoltCard EU'?'BER':'AUS',
+        amount: p==='VoltCard EU'? round2(usd/1.08):usd, cur: p==='VoltCard EU'?'EUR':'USD', usd, daysPastDue:dpd,
+        pSelfCure: round2(dpd<15?0.85:dpd<45?0.55:0.3), dispute: rng()<0.12, fraud:false });
+    }
+  }
+  for(const it of items){
+    const age = 1 + Math.min(it.daysPastDue,90)/30;
+    it.priority = round2(it.usd*(1-it.pSelfCure)*age);
+    it.risk = it.pSelfCure>0.6?'low':it.pSelfCure>0.4?'medium':'high';
+    if(it.fraud){ it.stage='Risk review'; it.owner='human'; it.channel='None until reviewed'; }
+    else if(it.dispute){ it.stage='Dispute'; it.owner='human'; it.channel=it.kind==='partner'?'Account manager':'Support agent'; }
+    else if(it.kind==='partner'){ it.stage = it.daysPastDue<15?'Friendly reminder':it.daysPastDue<45?'Second notice':'Escalate to finance'; it.owner= it.daysPastDue>=45?'human':'agent'; it.channel='Email to AP contact'; }
+    else { it.stage = it.daysPastDue<3?'In-app reminder':'Pay link + email'; it.owner='agent'; it.channel='Tesla app push'; }
+  }
+  items.sort((a,b)=>b.priority-a.priority);
+  return items;
+}
+
+function draftMessage(it){
+  if(it.kind==='partner') return `Hi ${it.partner} team, invoice ${it.id} for ${fmt(it.amount,it.cur)} in Supercharging sessions is ${it.daysPastDue} days past due. Could you confirm a payment date? If any sessions look wrong, reply with the session IDs and we'll review them before the next statement.`;
+  const what = it.product==='ride'?'Robotaxi ride':it.product==='charging'?'Supercharging session':it.product==='subscription'?'subscription renewal':'service visit';
+  return `Your ${what} payment of ${fmt(it.amount,it.cur)} didn't go through. Tap to pay with any method in your Tesla wallet. Questions about the charge? Reply here and a person will check it.`;
+}
+
+// ---- guardrails ----
+const LIMITS = { refundAutoUsd:100, writeOffAutoUsd:25 };
+function checkAction(a){
+  // a: {type, usd, codeKind, attempts, dispute}
+  if(a.type==='retry' && a.codeKind && a.codeKind!=='soft') return {allowed:false, needsApproval:false, reason:'Blocked: retrying a hard decline breaks card-network rules.'};
+  if(a.type==='retry' && (a.attempts||0)>=MAX_ATTEMPTS) return {allowed:false, needsApproval:false, reason:`Blocked: max ${MAX_ATTEMPTS} attempts per payment.`};
+  if(a.type==='send_message' && a.dispute) return {allowed:true, needsApproval:true, reason:'Customer disputed this charge, so a person sends any message.'};
+  if(a.type==='refund') return a.usd>LIMITS.refundAutoUsd ? {allowed:true, needsApproval:true, reason:`Refunds over $${LIMITS.refundAutoUsd} need approval.`} : {allowed:true, needsApproval:false, reason:'Within auto-refund limit.'};
+  if(a.type==='write_off') return a.usd>LIMITS.writeOffAutoUsd ? {allowed:true, needsApproval:true, reason:`Write-offs over $${LIMITS.writeOffAutoUsd} need approval.`} : {allowed:true, needsApproval:false, reason:'Within auto write-off limit.'};
+  return {allowed:true, needsApproval:false, reason:'Allowed.'};
+}
+
+// ---- evals: golden cases ----
+function runEvals(){
+  const C = (o)=>({id:'C-test', tenure:24, onTime:0.85, hasBackup:false, payday:5, ...o});
+  const T = (code, o)=>({id:'T-test', ref:'Rtest', code, amount:20, cur:'USD', ...o});
+  const first = (t,c)=>recoveryPlan(t,c).plan[0]?.action;
+  const naiveFirst = ()=> 'retry_now';
+  const L = (o)=>({ref:'R1', amount:50, cur:'USD', rail:'card', ts:AS_OF-5*DAY, collected:true, ...o});
+  const S = (o)=>({sid:'S1', ref:'R1', gross:50, fee: round2(50*0.029+0.30), cur:'USD', ...o});
+  const brk = (ledger, rows, asOf=AS_OF)=> classifyBreaks(ledger, rows, asOf).breaks.map(b=>b.type);
+  const cases = [
+    {area:'Recovery', name:'Expired card, no backup: never retry, ask rider to update', test:()=>first(T('54'),C())==='message_update', naive:()=>false},
+    {area:'Recovery', name:'Stolen card: no retry and fraud flag raised', test:()=>{const r=recoveryPlan(T('43'),C()); return !r.plan.some(s=>isRetry(s.action)) && r.fraudFlag;}, naive:()=>false},
+    {area:'Recovery', name:'Issuer outage (91): retry within the hour first', test:()=>first(T('91'),C())==='retry_1h', naive:()=>false},
+    {area:'Recovery', name:'Insufficient funds: wait for payday instead of hammering', test:()=>first(T('51'),C())==='retry_payday', naive:()=>false},
+    {area:'Recovery', name:'Soft decline with backup method: use the backup', test:()=>first(T('05'),C({hasBackup:true}))==='switch_backup', naive:()=>false},
+    {area:'Recovery', name:'Never more than 3 attempts per payment', test:()=>Object.keys(CODES).every(k=>recoveryPlan(T(k),C({hasBackup:true})).plan.length<=MAX_ATTEMPTS), naive:()=>true},
+    {area:'Recovery', name:'At most one retry of the same credential', test:()=>Object.keys(CODES).every(k=>recoveryPlan(T(k),C()).plan.filter(s=>isRetry(s.action)).length<=1), naive:()=>false},
+    {area:'Reconciliation', name:'Duplicate settlement is caught', test:()=>brk([L()],[S(),S({sid:'S2'})]).includes('duplicate')},
+    {area:'Reconciliation', name:'€0.03 difference is rounding, auto-resolved', test:()=>{const r=classifyBreaks([L({cur:'EUR'})],[S({cur:'EUR',gross:50.03, fee: round2(50*0.029+0.30/1.08)})],AS_OF).breaks[0]; return r&&r.type==='fx_rounding'&&r.autoResolve;}},
+    {area:'Reconciliation', name:'€4.00 difference is NOT treated as rounding', test:()=>brk([L({cur:'EUR'})],[S({cur:'EUR',gross:46, fee: round2(50*0.029+0.30/1.08)})]).includes('amount_mismatch')},
+    {area:'Reconciliation', name:'No settlement after 5 days is flagged missing', test:()=>brk([L()],[]).includes('missing')},
+    {area:'Reconciliation', name:'No settlement after 1 day is still pending, not a break', test:()=>brk([L({ts:AS_OF-DAY})],[]).length===0},
+    {area:'Reconciliation', name:'Fee above contracted rate is flagged', test:()=>brk([L()],[S({fee:2.25})]).includes('fee_overcharge')},
+    {area:'Reconciliation', name:'Money with no ledger entry is flagged orphan', test:()=>brk([],[S({ref:'K1'})]).includes('orphan')},
+    {area:'Reconciliation', name:'Clean match produces no break', test:()=>brk([L()],[S()]).length===0},
+    {area:'Guardrails', name:'Refund of $640 needs human approval', test:()=>checkAction({type:'refund',usd:640}).needsApproval},
+    {area:'Guardrails', name:'Retry on hard decline is blocked', test:()=>!checkAction({type:'retry',codeKind:'hard_update'}).allowed},
+    {area:'Guardrails', name:'Messages on disputed charges go to a person', test:()=>checkAction({type:'send_message',dispute:true}).needsApproval},
+  ];
+  return cases.map(c=>{ let pass=false, err=null; try{ pass=!!c.test(); }catch(e){ err=String(e); }
+    let naive=null; if(c.naive) naive=!!c.naive(); return {area:c.area, name:c.name, pass, naive, err}; });
+}
+
+function runAll(opts){
+  const data = generate(opts);
+  const recovery = simulateRecovery(data);
+  const recById = Object.fromEntries(recovery.map(r=>[r.txn,r]));
+  const settle = buildSettlements(data, recovery);
+  const ledger = data.txns.map(t=>({ref:t.ref, amount:t.amount, cur:t.cur, rail:t.rail, ts:t.ts, market:t.market, collected: t.status==='approved' || !!recById[t.id]?.recovered, txn:t.id}));
+  const recon = classifyBreaks(ledger, settle.rows, AS_OF);
+  const collections = buildCollections(data, recovery);
+  return { data, recovery, recById, settle, recon, collections };
+}
+
+if(typeof module!=='undefined') module.exports = { generate, simulateRecovery, recoveryPlan, buildSettlements, classifyBreaks, buildCollections, runEvals, runAll, checkAction, draftMessage, CODES, RAILS, MARKETS, PRODUCTS, ACTIONS, fmt };
+
+</script>
+<script>
+// ===== Leakage UI v2 =====
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const K = v => v>=1000 ? '$'+(v/1000).toFixed(v>=100000?0:1)+'K' : v<10 ? '$'+Number(v).toFixed(2) : '$'+Math.round(v);
+const usd2 = v => '$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+let S=null, seed=2026, story='recovered', segK='failed', groupK=null, openId=null, showN=6;
+const approvals=[], audit=[]; let apprSeq=1;
+const tx = id => S.txById[id];
+const CHEV = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function log(who, what){ audit.unshift({when:new Date(), who, what}); const el=$('#audit'); if(el) el.innerHTML = audit.slice(0,60).map(e=>`<tr><td class="tiny muted" style="white-space:nowrap">${e.when.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</td><td class="small"><b>${esc(e.who)}</b> ${esc(e.what)}</td></tr>`).join(''); }
+function what(t){ return {ride:'Robotaxi ride',charging:'Charging session',subscription:'Subscription renewal',service:'Service visit'}[t.product]; }
+function city(t){ return MARKETS[t.market].city; }
+
+// ---- friendly groupings ----
+const FAIL_GROUPS = [
+  {k:'funds', title:'Not enough money', codes:['51','61','BAL'], plan:'Wait for the rider\'s usual payday, try once, then offer another way to pay.'},
+  {k:'bankno', title:'Bank said no', codes:['05'], plan:'Try the backup card in their wallet, or retry the next day.'},
+  {k:'outage', title:'Bank was briefly down', codes:['91'], plan:'Retry within the hour. These usually go through.'},
+  {k:'expired', title:'Card expired or not valid', codes:['54','14','TK'], plan:'Never retry the same card. Use a backup or ask the rider to update it.'},
+  {k:'stolen', title:'Card reported lost or stolen', codes:['41','43'], plan:'Never retry. Flag for a fraud check and only accept a different method.'},
+];
+const MISMATCH_GROUPS = [
+  {k:'duplicate', title:'Charged twice', plan:'Refund the rider and claim the money back from the provider.'},
+  {k:'missing', title:'Money never arrived', plan:'Ask the provider to trace it. Charge again if it is truly lost.'},
+  {k:'amount_mismatch', title:'Wrong amount arrived', plan:'Check for a fare change after the ride, then fix the record or bill the difference.'},
+  {k:'fee_overcharge', title:'Provider took extra fees', plan:'Ask the provider for a credit back to the contracted rate.'},
+  {k:'orphan', title:'Money with no matching charge', plan:'Usually a kiosk session that never synced. Create the missing record.'},
+  {k:'fx_rounding', title:'Tiny currency rounding', plan:'Fixed automatically. Differences under 10 cents are written off.'},
+];
+const UNPAID_GROUPS = [
+  {k:'person', title:'Needs a person', test:c=>c.owner==='human', plan:'Disputes, possible fraud, and very late partner invoices. A person decides the next step.'},
+  {k:'riders', title:'Riders, agent is following up', test:c=>c.owner==='agent'&&c.kind==='consumer', plan:'A friendly in-app reminder with a pay link, then an email.'},
+  {k:'partners', title:'Partner invoices, agent is following up', test:c=>c.owner==='agent'&&c.kind==='partner', plan:'Polite reminders to the partner\'s billing team until a payment date is confirmed.'},
+];
+
+function build(){
+  S = runAll({count:+$('#vol').value, seed});
+  S.txById = Object.fromEntries(S.data.txns.map(t=>[t.id,t]));
+  S.txByRef = Object.fromEntries(S.data.txns.map(t=>[t.ref,t]));
+  S.breakByRef = Object.fromEntries(S.recon.breaks.map(b=>[b.ref,b]));
+  let failed=0, smart=0, naive=0, viol=0;
+  for(const r of S.recovery){ const u=tx(r.txn).usd; failed+=u; if(r.recovered) smart+=u; if(r.naiveOk) naive+=u; viol+=r.naiveViolations; }
+  const billed = S.data.txns.reduce((a,t)=>a+t.usd,0);
+  const mis = S.recon.breaks.reduce((a,b)=>a+b.diffUsd,0);
+  const misAuto = S.recon.breaks.filter(b=>b.autoResolve).reduce((a,b)=>a+b.diffUsd,0);
+  const riders = S.collections.filter(c=>c.kind==='consumer'), partners = S.collections.filter(c=>c.kind==='partner');
+  S.k = { billed, failed, smart, naive, viol, mis, misAuto, leaked: failed+mis, unpaidRiders: riders.reduce((a,c)=>a+c.usd,0), nRiders:riders.length,
+    partnerUsd: partners.reduce((a,c)=>a+c.usd,0), nPartners: partners.length, nPerson:S.collections.filter(c=>c.owner==='human').length,
+    nFailed:S.recovery.length, nBreaks:S.recon.breaks.length };
+  approvals.length=0; audit.length=0;
+  log('Recovery agent', `planned fixes for ${S.k.nFailed} failed payments and recovered ${K(smart)}.`);
+  log('Reconciliation agent', `checked every settlement and found ${S.k.nBreaks} mismatches.`);
+  log('Collections agent', `queued ${S.collections.length} unpaid accounts; ${S.k.nPerson} need a person.`);
+  groupK=null; openId=null;
+  renderHero(); renderStory(); renderFix(); renderWaiting(); renderEvals();
+}
+
+// ---- hero ----
+function icon(kind){
+  const p = { card:'<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 10h18M7 15h4"/>', clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', scale:'<path d="M12 4v16M6 20h12M5 8h14M7 8l-3 6a3 3 0 0 0 6 0zM17 8l-3 6a3 3 0 0 0 6 0z"/>' }[kind];
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+}
+function renderHero(){
+  const k=S.k; const back = k.smart + k.misAuto;
+  $('#headline').innerHTML = `This week, <span class="amt-leak">${K(k.leaked)}</span> of payments leaked. Leakage got <span class="amt-ok">${K(back)}</span> back automatically.`;
+  $('#subline').textContent = `Out of ${K(k.billed)} billed across ${S.data.txns.length.toLocaleString()} rides, charging sessions, and renewals. The rest is lined up for follow-up, with a person deciding anything risky.`;
+  const rest = Math.max(0, k.leaked - back);
+  const seg = [[back,'var(--green)','Got back automatically'],[rest,'var(--amber)','Being followed up'],[k.billed-k.leaked,'#DCE3F0','Paid normally']];
+  // bar shows only the leaked part, so it is readable
+  $('#flowbar').innerHTML = `<span style="width:${back/k.leaked*100}%;background:var(--green)"></span><span style="width:${rest/k.leaked*100}%;background:var(--amber)"></span>`;
+  $('#flowlegend').innerHTML = `<span><span class="dot" style="background:var(--green)"></span><b>${K(back)}</b> got back automatically</span><span><span class="dot" style="background:var(--amber)"></span><b>${K(rest)}</b> being followed up</span><span>Bar shows only the ${K(k.leaked)} that leaked</span>`;
+  const times = k.naive>0 ? (k.smart/k.naive).toFixed(1) : '–';
+  $('#leaks').innerHTML = [
+    {ico:'card', c:'var(--coral)', bg:'var(--coral-soft)', title:'Failed payments', num:K(k.failed), what:`${k.nFailed} payments declined after the ride or charge was already done.`, good:`${K(k.smart)} recovered, ${times}x more than plain retries`, go:'failed'},
+    {ico:'clock', c:'var(--amber)', bg:'var(--amber-soft)', title:'Unpaid accounts', num:K(k.unpaidRiders), what:`${k.nRiders} riders still owe money after every recovery step. Separately, ${k.nPartners} partner invoices are overdue (${K(k.partnerUsd)}).`, good:`${k.nPerson} need a person, the rest are handled`, go:'unpaid'},
+    {ico:'scale', c:'var(--blue)', bg:'var(--blue-soft)', title:'Money mismatches', num:K(k.mis), what:`${k.nBreaks} times what we charged and what arrived did not match.`, good:`Every one explained with a suggested fix`, go:'mismatch'},
+  ].map(x=>`<div class="card leak"><div class="ico" style="color:${x.c};background:${x.bg}">${icon(x.ico)}</div><div class="small muted">${x.title}</div><div class="num">${x.num}</div><div class="what">${esc(x.what)}</div><div class="good">${esc(x.good)}</div><button data-go="${x.go}">Review</button></div>`).join('');
+  $('#leaks').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ setSeg(b.dataset.go); location.hash='#fix'; });
+}
+
+// ---- story ----
+const STORIES = [
+  {k:'recovered', label:'A ride we got paid for'},
+  {k:'collections', label:'A ride that stayed unpaid'},
+  {k:'double', label:'A double charge'},
+  {k:'stolen', label:'A stolen card'},
+];
+function findStory(k){
+  const ride = r => tx(r.txn).product==='ride';
+  if(k==='recovered') return S.recovery.find(r=>r.recovered && r.steps.length>=2 && ride(r)) || S.recovery.find(r=>r.recovered);
+  if(k==='collections') return S.recovery.find(r=>!r.recovered && r.kind==='soft' && ride(r)) || S.recovery.find(r=>!r.recovered);
+  if(k==='stolen') return S.recovery.find(r=>r.fraudFlag);
+  if(k==='double'){ const b=S.recon.breaks.find(b=>b.type==='duplicate' && S.txByRef[b.ref]?.product==='ride') || S.recon.breaks.find(b=>b.type==='duplicate' && S.txByRef[b.ref]); return b?{brk:b}:null; }
+}
+function renderStory(){
+  $('#storychips').innerHTML = STORIES.map(s=>`<button class="chip" aria-pressed="${s.k===story}" data-s="${s.k}">${s.label}</button>`).join('');
+  $('#storychips').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ story=b.dataset.s; renderStory(); });
+  const x = findStory(story); const st=[]; let note='';
+  if(!x){ $('#storyline').innerHTML=''; $('#storynote').textContent='No example of this in the simulated week. Try a new week.'; return; }
+  if(x.brk){
+    const b=x.brk, t=S.txByRef[b.ref];
+    st.push(['ok','1',endLabel(t),`${fmt(t.amount,t.cur)} in ${city(t)}`],['ok','2','Payment approved',RAILS[t.rail].label],['bad','!','Settled twice',`The provider paid ${fmt(b.settledAmt,b.cur)} for one charge`],['go','3','Leakage spots it','Same charge, two settlements'],['go','4','Refund suggested','Waits for a person to approve']);
+    note = 'Without a check like this, the rider pays twice and finds out on their bank statement.';
+  } else {
+    const r=x, t=tx(r.txn);
+    st.push(['ok','1',endLabel(t),`${fmt(t.amount,t.cur)} in ${city(t)}`],['bad','!','Payment declined',`${CODES[t.code].label}`]);
+    if(r.fraudFlag) st.push(['bad','!','Fraud check','Card reported lost or stolen']);
+    r.steps.forEach((s,i)=>st.push([s.ok?'ok':'n', String(i+2), ACTIONS[s.action].label, s.ok?'This worked':'Did not work']));
+    if(r.recovered) st.push(['ok','✓','Paid', `${RAILS[t.rail].label}, matched to our records`]);
+    else st.push(['go','→','Sent to collections', 'Friendly reminders, a person if needed']);
+    note = r.fraudFlag ? 'Plain retry logic would have tried this card three more times. Card networks penalize that, and it never works.'
+      : r.recovered ? `Leakage picked the order based on why it failed and this rider's history. Plain retries ${r.naiveOk?'would also have worked here':'would have failed here'}.`
+      : 'Not every payment comes back right away. It moves to collections with a clear next step instead of being forgotten.';
+  }
+  $('#storyline').innerHTML = st.map(([c,i,t,d],n)=>`<div class="st" style="animation-delay:${n*80}ms"><div class="c ${c}" aria-hidden="true">${esc(i)}</div><div class="t">${esc(t)}</div><div class="d">${esc(d)}</div></div>`).join('');
+  $('#storynote').textContent = note;
+}
+function endLabel(t){ return {ride:'Ride ends',charging:'Charging ends',subscription:'Renewal due',service:'Service done'}[t.product]; }
+
+// ---- fix issues ----
+function setSeg(k){ segK=k; groupK=null; openId=null; showN=6; document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-selected', b.dataset.k===k)); renderFix(); }
+function groupsFor(){
+  if(segK==='failed') return FAIL_GROUPS.map(g=>{ const rs=S.recovery.filter(r=>g.codes.includes(tx(r.txn).code)); return {...g, n:rs.length, usd:rs.reduce((a,r)=>a+tx(r.txn).usd,0), good:rs.filter(r=>r.recovered).reduce((a,r)=>a+tx(r.txn).usd,0), items:rs.sort((a,b)=>tx(b.txn).usd-tx(a.txn).usd)}; }).filter(g=>g.n);
+  if(segK==='mismatch') return MISMATCH_GROUPS.map(g=>{ const rs=S.recon.breaks.filter(b=>b.type===g.k); return {...g, n:rs.length, usd:rs.reduce((a,b)=>a+b.diffUsd,0), items:rs.sort((a,b)=>b.diffUsd-a.diffUsd)}; }).filter(g=>g.n);
+  return UNPAID_GROUPS.map(g=>{ const rs=S.collections.filter(g.test); return {...g, n:rs.length, usd:rs.reduce((a,c)=>a+c.usd,0), items:rs}; }).filter(g=>g.n);
+}
+function renderFix(){
+  const gs = groupsFor();
+  if(!groupK || !gs.find(g=>g.k===groupK)) groupK = gs.slice().sort((a,b)=>b.usd-a.usd)[0]?.k;
+  $('#groups').innerHTML = gs.map(g=>`<button class="group" aria-pressed="${g.k===groupK}" data-g="${g.k}"><div class="gt"><span>${esc(g.title)}</span><span>${K(g.usd)}</span></div><div class="gm"><span>${g.n} ${segK==='unpaid'?'accounts':segK==='mismatch'?'cases':'payments'}</span>${g.good!==undefined?`<span style="color:var(--green)">${K(g.good)} recovered</span>`:''}</div></button>`).join('');
+  $('#groups').querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{ groupK=b.dataset.g; openId=null; showN=6; renderFix(); if(innerWidth<860) $('#panel').scrollIntoView({block:'start'}); });
+  const g = gs.find(x=>x.k===groupK);
+  if(!g){ $('#panel').innerHTML='<p class="muted">Nothing here this week.</p>'; return; }
+  const list = g.items.slice(0,showN);
+  $('#panel').innerHTML = `<div class="ph"><div><h3>${esc(g.title)}</h3><p class="small muted">${g.n} ${segK==='unpaid'?'accounts':segK==='mismatch'?'cases':'payments'}, ${K(g.usd)} in total. Largest first.</p></div></div>
+    <div class="howto"><b>What Leakage does:</b> ${esc(g.plan)}</div>
+    <div class="items">${list.map(itemRow).join('')}</div>
+    ${g.items.length>showN?`<button class="ghost more" id="showmore">Show ${Math.min(6,g.items.length-showN)} more</button>`:''}`;
+  $('#panel').querySelectorAll('.item > button').forEach(b=>b.onclick=()=>{ openId = openId===b.dataset.id?null:b.dataset.id; renderFix(); });
+  const sm=$('#showmore'); if(sm) sm.onclick=()=>{ showN+=6; renderFix(); };
+  if(openId) bindBody(openId);
+}
+function itemRow(x){
+  let id, title, sub, amt, pill;
+  if(segK==='failed'){ const t=tx(x.txn); id=t.id; title=`${what(t)} in ${city(t)}`; sub=`${RAILS[t.rail].label}, ${CODES[t.code].label.toLowerCase()}`; amt=fmt(t.amount,t.cur); pill = x.recovered?'<span class="pill p-ok">Recovered</span>':'<span class="pill p-warn">Following up</span>'; }
+  else if(segK==='mismatch'){ const t=S.txByRef[x.ref]; id=x.ref; title= t?`${what(t)} in ${city(t)}`:`Kiosk session ${x.ref}`; sub = t?`${RAILS[t.rail].label} via ${t.partner||RAILS[t.rail].provider}`:(x.provider||''); amt=usd2(x.diffUsd); pill = statusPill(x.status); }
+  else { id=x.id; title = x.kind==='partner'?x.partner:`Rider ${x.customer}`; sub = x.kind==='partner'?`Partner invoice, ${x.daysPastDue} days late`:`${what(S.txById[x.txn])}, ${x.daysPastDue} days late`; amt=fmt(x.amount,x.cur); pill = x.fraud?'<span class="pill p-bad">Fraud check</span>':x.dispute?'<span class="pill p-warn">Disputed</span>':`<span class="pill p-n">${x.risk} risk</span>`; }
+  const open = openId===id;
+  return `<div class="item${open?' open':''}"><button data-id="${esc(id)}" aria-expanded="${open}"><div><div class="it">${esc(title)}</div><div class="is">${esc(sub)}</div></div><div>${pill}</div><div class="amt">${esc(amt)} ${CHEV}</div></button>${open?`<div class="body" id="body">${bodyFor(x)}</div>`:''}</div>`;
+}
+function statusPill(s){ return {auto_resolved:'<span class="pill p-ok">Auto-fixed</span>', needs_review:'<span class="pill p-warn">Needs review</span>', queued:'<span class="pill p-go">Waiting for OK</span>', resolved:'<span class="pill p-ok">Fixed</span>'}[s]||''; }
+function bodyFor(x){
+  if(segK==='failed'){
+    const t=tx(x.txn), c=S.data.custById[t.customer];
+    const steps = x.plan.map((s,i)=>{ const done=x.steps[i]; const st = done? (done.ok?['ok','Worked']:['n','Tried']) : ['n','Not needed'];
+      return `<div class="step"><span class="n" style="background:${st[0]==='ok'?'var(--green-soft)':'var(--soft)'};color:${st[0]==='ok'?'var(--green)':'var(--muted)'}">${i+1}</span><span>${esc(ACTIONS[s.action].label)}</span><span class="pill ${st[0]==='ok'?'p-ok':'p-n'}" style="margin-left:auto">${st[1]}</span></div>`; }).join('');
+    return `<p class="small" style="margin-top:12px">${esc(x.reason)}</p><div class="steps">${steps}</div>
+      <div class="facts"><span>Rider pays on time <b>${Math.round(c.onTime*100)}%</b></span><span>Backup card <b>${c.hasBackup?'yes':'no'}</b></span><span>Chance of recovery <b>${Math.round(x.pRecover*100)}%</b></span></div>
+      <p class="note">Plain retries: ${x.naiveOk?'would have worked':'would have failed'}${x.naiveViolations?`, and broken card-network rules ${x.naiveViolations} times`:''}.</p>`;
+  }
+  if(segK==='mismatch'){
+    return `<p style="margin-top:12px">${esc(x.explanation)}</p><div class="facts"><span>We charged <b>${x.ledgerAmt?fmt(x.ledgerAmt,x.cur):'nothing'}</b></span><span>Provider paid <b>${x.settledAmt?fmt(x.settledAmt,x.cur):'nothing yet'}</b></span><span>Confidence <b>${Math.round(x.confidence*100)}%</b></span></div>
+      <p class="note"><b>Suggested fix:</b> ${esc(x.fix)}</p>${x.status==='needs_review'?'<div class="actions"><button class="primary" data-act="fix">Send fix for approval</button></div>':''}`;
+  }
+  const gate = checkAction({type:'send_message', dispute:x.dispute||x.fraud});
+  return `${x.fraud?'<p class="note">Linked to a lost or stolen card. No messages until a fraud check clears it.</p>':''}${x.dispute?'<p class="note">This charge was disputed, so a person reviews it before anything is sent.</p>':''}
+    <div class="facts"><span>Likely to pay without help <b>${Math.round(x.pSelfCure*100)}%</b></span><span>Channel <b>${esc(x.channel)}</b></span><span>Next step <b>${esc(x.stage)}</b></span></div>
+    <p class="small" style="margin-top:14px;font-weight:700">Drafted message</p><div class="msg" id="draft">${esc(draftMessage(x))}</div>
+    <div class="actions"><button class="primary" data-act="send">${gate.needsApproval?'Send to a person':'Send for approval'}</button><button data-act="rewrite" ${sampleFn?'':'hidden'}>Rewrite with AI</button></div><p class="note" id="rwnote"></p>`;
+}
+function bindBody(id){
+  const body=$('#body'); if(!body) return;
+  if(segK==='mismatch'){ const b=S.breakByRef[id]; const f=body.querySelector('[data-act="fix"]'); if(f) f.onclick=()=>{ const type={duplicate:'refund'}[b.type]||'open_trace'; propose({type, target:b.ref, usd:b.diffUsd, reason:b.label}, 'Reconciliation agent'); b.status='queued'; renderFix(); }; }
+  if(segK==='unpaid'){ const c=S.collections.find(x=>x.id===id);
+    body.querySelector('[data-act="send"]').onclick=()=>{ propose({type:'send_message', target:c.id, usd:c.usd, message:$('#draft').textContent, reason:c.stage, dispute:c.dispute||c.fraud}, 'Collections agent'); $('#rwnote').textContent='Sent to "Waiting for your OK" in Ask Leakage.'; };
+    const rw=body.querySelector('[data-act="rewrite"]'); if(rw) rw.onclick=()=>rewrite(c, rw); }
+}
+async function rewrite(c, btn){
+  btn.disabled=true; $('#rwnote').textContent='Writing...';
+  const ctx = c.kind==='partner' ? `Business partner "${c.partner}" (a charge-card network), invoice ${c.id} for ${fmt(c.amount,c.cur)}, ${c.daysPastDue} days overdue.` : `A rider who still owes ${fmt(c.amount,c.cur)} for a ${what(S.txById[c.txn]).toLowerCase()}, ${c.daysPastDue} days late${c.dispute?', and has disputed the charge':''}.`;
+  try{ const {text} = await sampleFn(`Write one short, warm payment reminder (under 60 words) for this account. Respectful, no threats, no guilt. Mention the amount, one easy way to pay, and how to question the charge. Plain text only.\n\nAccount: ${ctx}`, {modelTier:'quick', onText:({text})=>{ $('#draft').textContent=text; }});
+    $('#draft').textContent=text; $('#rwnote').textContent='Rewritten by AI. It still waits for approval before sending.'; log('Collections agent', `rewrote the message for ${c.id} with AI.`);
+  }catch(e){ $('#rwnote').textContent=errText(e); } finally{ btn.disabled=false; }
+}
+
+// ---- approvals ----
+function propose(a, who){
+  const gate = checkAction({type: a.type==='open_trace'||a.type==='switch_backup'?'other':a.type, usd:a.usd, codeKind:a.codeKind, attempts:a.attempts, dispute:a.dispute});
+  if(!gate.allowed){ log('Safety check', `blocked "${a.type.replace('_',' ')}" on ${a.target}. ${gate.reason}`); return {status:'blocked', reason:gate.reason}; }
+  const it={id:'A-'+(apprSeq++), ...a, who, gate:gate.reason, status:'pending'}; approvals.unshift(it);
+  log(who, `suggested "${friendlyAct(a.type)}" for ${a.target}.`); renderWaiting();
+  return {status:'waiting_for_human_approval', approval_id:it.id, note:gate.reason};
+}
+function friendlyAct(t){ return {refund:'refund the customer', write_off:'write it off', retry:'retry the payment', send_message:'send a message', switch_backup:'charge the backup card', open_trace:'ask the provider to trace it'}[t]||t; }
+function renderWaiting(){
+  const pend=approvals.filter(a=>a.status==='pending');
+  const bd=$('#navbadge'); bd.textContent=pend.length; bd.hidden=!pend.length;
+  $('#waitlist').innerHTML = approvals.length ? approvals.slice(0,8).map(a=>`<div class="wa"><div class="wt">${esc(friendlyAct(a.type)[0].toUpperCase()+friendlyAct(a.type).slice(1))}</div>
+    <div class="tiny muted">${esc(a.target)}${a.usd?`, ${usd2(a.usd)}`:''}, from ${esc(a.who)}</div>
+    ${a.status==='pending'?`<div class="actions" style="margin-top:8px"><button class="primary" data-ok="${a.id}">Approve</button><button data-no="${a.id}">Decline</button></div>`:`<span class="pill ${a.status==='approved'?'p-ok':'p-n'}" style="margin-top:8px">${a.status==='approved'?'Approved':'Declined'}</span>`}</div>`).join('')
+    : '<p class="small muted" style="margin-top:14px">Nothing yet. Send a fix from "Fix issues", or ask the assistant for a suggestion.</p>';
+  $('#waitlist').querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>decide(b.dataset.ok,true));
+  $('#waitlist').querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>decide(b.dataset.no,false));
+}
+function decide(id, ok){ const a=approvals.find(x=>x.id===id); a.status=ok?'approved':'declined'; if(ok&&S.breakByRef[a.target]){ S.breakByRef[a.target].status='resolved'; if(segK==='mismatch') renderFix(); } log('You', `${ok?'approved':'declined'} "${friendlyAct(a.type)}" for ${a.target}.`); renderWaiting(); }
+
+// ---- evals ----
+function renderEvals(){
+  const ev=runEvals(); const p=ev.filter(e=>e.pass).length; const nv=ev.filter(e=>e.naive!==null), np=nv.filter(e=>e.naive).length;
+  $('#evsum').textContent = `Leakage passes ${p} of ${ev.length}. Plain retries pass ${np} of ${nv.length} of the payment cases.`;
+  $('#evbody').innerHTML = ev.map(e=>`<tr><td>${esc(e.name)}</td><td>${e.pass?'<span class="pill p-ok">Pass</span>':'<span class="pill p-bad">Fail</span>'}</td><td>${e.naive===null?'<span class="tiny muted">n/a</span>':e.naive?'<span class="pill p-ok">Pass</span>':'<span class="pill p-bad">Fail</span>'}</td></tr>`).join('');
+}
+
+// ---- AI explainer ----
+const AI = [
+  {kind:'Prediction model', c:'p-go', name:'Smart recovery', what:'Scores every way to recover a failed payment and picks the best order to try them.', tech:'Scores each option from the decline reason, payment method, and rider history. Here it is a hand-tuned scoring table; with real data it becomes a trained model (gradient-boosted trees).'},
+  {kind:'Rules engine', c:'p-n', name:'Money matching', what:'Compares every charge with what each provider actually paid and names the problem.', tech:'Deterministic matching with tolerances (for example, rounding under 10 cents). Rules, not a language model, because money records must be exact and repeatable.'},
+  {kind:'Risk scoring', c:'p-go', name:'Collections priority', what:'Ranks unpaid accounts by how much money is likely lost if nobody acts.', tech:'Amount times the chance it stays unpaid times how late it is. Disputes and fraud skip the queue and go to a person.'},
+  {kind:'Language model', c:'p-ok', name:'Assistant and messages', what:'Answers questions about the week and writes friendly reminder messages.', tech:'Claude with tool calling: it can only read data through six tools and suggest actions through one. It never sees or moves money directly.'},
+  {kind:'Safety layer', c:'p-warn', name:'Guardrails and approval', what:'Stops unsafe actions and sends risky ones to a person.', tech:'Hard rules checked on every action: no retries on dead or stolen cards, at most 3 attempts, refunds over $100 and write-offs over $25 need approval.'},
+  {kind:'Testing', c:'p-n', name:'Evals', what:'A fixed set of tricky cases the logic must pass before any change ships.', tech:`${18} golden cases covering recovery, matching, and safety rules. Run them below.`},
+];
+function renderAI(){ $('#aigrid').innerHTML = AI.map(a=>`<div class="card aic"><span class="pill ${a.c} kind">${a.kind}</span><h3>${a.name}</h3><p>${a.what}</p><div class="tech">${a.tech}</div></div>`).join(''); }
+
+// ---- assistant ----
+let sampleFn=null, turns=[], ctl=null, cpReady=false;
+const RULES = `You are the Leakage assistant: a friendly helper for a car company's payments team (Robotaxi rides, Supercharging, subscriptions, service). All data is a simulated week. Always use tools for numbers; never invent them. You can only SUGGEST actions with suggest_action; a person approves them, so never say something was done. Write like a helpful colleague: plain words, short paragraphs, lead with the answer, use USD. No markdown headers or tables. If a safety rule blocks something, say so kindly in one line and offer a safe alternative.`;
+const TOOL_NAMES = {get_summary:'Checked the weekly summary', find_failed_payments:'Looked through failed payments', get_payment:'Opened a payment', list_mismatches:'Checked money mismatches', list_unpaid:'Checked unpaid accounts', suggest_action:'Sent a suggestion for your OK'};
+const TOOLS = () => [
+  {name:'get_summary', description:'Totals for the week.', inputSchema:{type:'object',properties:{}}, execute:()=>{ const k=S.k; return {billed_usd:Math.round(k.billed), payments:S.data.txns.length, failed_usd:Math.round(k.failed), failed_count:k.nFailed, recovered_usd:Math.round(k.smart), plain_retry_recovered_usd:Math.round(k.naive), plain_retry_rule_violations:k.viol, unpaid_riders_usd:Math.round(k.unpaidRiders), overdue_partner_invoices_usd:Math.round(k.partnerUsd), mismatches:k.nBreaks, mismatch_usd:Math.round(k.mis), waiting_for_approval:approvals.filter(a=>a.status==='pending').length}; }},
+  {name:'find_failed_payments', description:'Failed payments, largest first. Optional filters, or group_by for totals.', inputSchema:{type:'object',properties:{rail:{type:'string',enum:Object.keys(RAILS)},market:{type:'string',enum:Object.keys(MARKETS)},product:{type:'string',enum:Object.keys(PRODUCTS)},code:{type:'string',enum:Object.keys(CODES)},recovered:{type:'boolean'},group_by:{type:'string',enum:['rail','market','product','code']},limit:{type:'integer'}}}, execute:(q)=>{
+    let rs=S.recovery.filter(r=>{const t=tx(r.txn); return (!q.rail||t.rail===q.rail)&&(!q.market||t.market===q.market)&&(!q.product||t.product===q.product)&&(!q.code||t.code===q.code)&&(q.recovered===undefined||r.recovered===q.recovered);});
+    if(q.group_by){ const g={}; for(const r of rs){const t=tx(r.txn); const o=(g[t[q.group_by]] ||= {failed_usd:0,recovered_usd:0,count:0}); o.count++; o.failed_usd+=t.usd; if(r.recovered)o.recovered_usd+=t.usd;} for(const k in g){g[k].failed_usd=Math.round(g[k].failed_usd); g[k].recovered_usd=Math.round(g[k].recovered_usd);} return g; }
+    rs.sort((a,b)=>tx(b.txn).usd-tx(a.txn).usd);
+    return {total:rs.length, items:rs.slice(0,Math.min(q.limit||8,20)).map(r=>{const t=tx(r.txn); return {id:t.id, what:t.product, city:MARKETS[t.market].city, method:RAILS[t.rail].label, usd:t.usd, reason:CODES[t.code].label, plan:r.plan.map(s=>ACTIONS[s.action].label), recovered:r.recovered};})}; }},
+  {name:'get_payment', description:'Details for one payment id (T-...).', inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id']}, execute:({id})=>{ const t=tx(id); if(!t) throw new Error('No payment with id '+id); const r=S.recById[id], c=S.data.custById[t.customer]; return {id:t.id, what:t.product, city:MARKETS[t.market].city, method:RAILS[t.rail].label, amount:fmt(t.amount,t.cur), usd:t.usd, status:t.status, reason:t.code?CODES[t.code].label:null, recovery:r?{why:r.reason, plan:r.plan.map(s=>ACTIONS[s.action].label), recovered:r.recovered, fraud_flag:r.fraudFlag}:null, rider:{on_time:c.onTime, has_backup_card:c.hasBackup}, mismatch:S.breakByRef[t.ref]?.explanation||null}; }},
+  {name:'list_mismatches', description:'Money mismatches, largest first.', inputSchema:{type:'object',properties:{type:{type:'string',enum:Object.keys(BREAK_INFO)},limit:{type:'integer'}}}, execute:(q)=>{ const rs=S.recon.breaks.filter(b=>!q.type||b.type===q.type).sort((a,b)=>b.diffUsd-a.diffUsd); return {total:rs.length, total_usd:Math.round(rs.reduce((a,b)=>a+b.diffUsd,0)), items:rs.slice(0,Math.min(q.limit||8,20)).map(b=>({ref:b.ref, problem:b.label, usd:b.diffUsd, explanation:b.explanation, fix:b.fix, status:b.status}))}; }},
+  {name:'list_unpaid', description:'Unpaid accounts by priority.', inputSchema:{type:'object',properties:{kind:{type:'string',enum:['consumer','partner']},needs_person:{type:'boolean'},limit:{type:'integer'}}}, execute:(q)=>{ const rs=S.collections.filter(c=>(!q.kind||c.kind===q.kind)&&(q.needs_person===undefined||(c.owner==='human')===q.needs_person)); return {total:rs.length, items:rs.slice(0,Math.min(q.limit||8,20)).map(c=>({id:c.id, who:c.partner||c.customer, usd:c.usd, days_late:c.daysPastDue, risk:c.risk, next_step:c.stage, needs_person:c.owner==='human', disputed:c.dispute, fraud:c.fraud}))}; }},
+  {name:'suggest_action', description:'Suggest an action for a person to approve. Safety rules apply. type: refund | write_off | retry | send_message | switch_backup | open_trace.', inputSchema:{type:'object',properties:{type:{type:'string',enum:['refund','write_off','retry','send_message','switch_backup','open_trace']},target_id:{type:'string'},usd:{type:'number'},message:{type:'string'},reason:{type:'string'}},required:['type','target_id','reason']}, execute:(a)=>{
+    const t=tx(a.target_id), r=t&&S.recById[t.id], col=S.collections.find(c=>c.id===a.target_id);
+    return propose({type:a.type, target:a.target_id, usd:a.usd ?? (t?t.usd:col?col.usd:S.breakByRef[a.target_id]?.diffUsd), message:a.message, reason:a.reason, codeKind:r?r.kind:undefined, attempts:r?r.steps.length:0, dispute:col?(col.dispute||col.fraud):false}, 'Assistant'); }},
+];
+const STARTERS = [
+  {q:'Where are we losing the most money this week?', s:'A quick overview'},
+  {q:'What should I fix first today?', s:'Prioritized to-do list'},
+  {q:'Explain the double charges and suggest fixes', s:'Mismatch walkthrough'},
+  {q:'Retry the biggest payment from a stolen card', s:'See the safety rules work'},
+];
+function errText(e){ return ({not_granted:'AI access was turned off for this page.', rate_limited:'Lots of requests right now. Try again in a minute.', cancelled:'Stopped.'})[e?.code] || 'The assistant could not answer that. Please try again.'; }
+function bubble(cls, text, before){ const d=document.createElement('div'); d.className=cls; d.textContent=text; const chat=$('#chat'); before?chat.insertBefore(d,before):chat.appendChild(d); chat.scrollTop=chat.scrollHeight; return d; }
+function welcome(){
+  $('#chat').innerHTML='';
+  bubble('b ai', !cpReady ? 'Connecting to Claude...' : sampleFn ? 'Hi! I can look up anything in this week\'s payments and suggest fixes. I never move money myself; you approve everything. Try one of these:' : 'The assistant runs on Claude, so it works when this page is opened inside Claude. Everything else on the page works without it.');
+  if(sampleFn){ const w=document.createElement('div'); w.className='starters'; w.innerHTML=STARTERS.map(s=>`<button>${esc(s.q)}<span>${esc(s.s)}</span></button>`).join(''); $('#chat').appendChild(w); w.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>ask(STARTERS[i].q)); }
+}
+async function ask(q){
+  if(!q.trim()||!sampleFn) return;
+  document.querySelector('.starters')?.remove();
+  bubble('b me', q); $('#askbox').value=''; turns.push({role:'user', content:q});
+  const out=bubble('b ai','Thinking...');
+  $('#send').disabled=true; $('#stop').hidden=false; ctl=new AbortController();
+  const tools=TOOLS().map(t=>({...t, execute:(input)=>{ bubble('tool', TOOL_NAMES[t.name]||t.name, out); return t.execute(input||{}); }}));
+  try{ const {text}=await sampleFn([{role:'user',content:RULES},{role:'assistant',content:'Got it.'},...turns.slice(-8)], {tools, signal:ctl.signal, cache:false, onText:({text})=>{ out.textContent=text; $('#chat').scrollTop=$('#chat').scrollHeight; }});
+    out.textContent=text; turns.push({role:'assistant', content:text});
+  }catch(e){ out.textContent=(e.text?e.text+'\n\n':'')+errText(e); turns.pop(); }
+  finally{ $('#send').disabled=false; $('#stop').hidden=true; }
+}
+
+// ---- wire up ----
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>setSeg(b.dataset.k));
+$('#vol').onchange=build;
+$('#regen').onclick=()=>{ seed=Math.floor(Math.random()*1e6); build(); };
+$('#send').onclick=()=>ask($('#askbox').value);
+$('#stop').onclick=()=>ctl?.abort();
+$('#askbox').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ask($('#askbox').value);} };
+renderAI(); build(); welcome();
+(async()=>{
+  try{ sampleFn = window.claude ? await window.claude.use('sample') : null; }catch(e){ sampleFn=null; }
+  cpReady=true;
+  $('#cpstatus').textContent = sampleFn ? 'Online, powered by Claude' : 'Available inside Claude';
+  $('#send').disabled = !sampleFn; $('#askbox').disabled = !sampleFn;
+  welcome(); if(segK==='unpaid') renderFix();
+})();
+
+</script>
+</body></html>
