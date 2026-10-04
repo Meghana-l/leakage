@@ -269,26 +269,6 @@ build.js            Bundles everything into dist/index.html
 vercel.json         Vercel build settings
 ```
 
-## Run it locally
-
-Requires Node.js 18 or newer.
-
-```bash
-npm test          # run the tests
-npm run build     # build dist/index.html
-```
-
-Open `dist/index.html` in a browser. Everything works except the assistant, which needs the Vercel function.
-
-## Deploy on Vercel
-
-1. Import this repository into Vercel. The build settings come from `vercel.json`.
-2. In **Settings → Environment Variables**, add `GROQ_API_KEY` with a key from [console.groq.com](https://console.groq.com).
-3. Optional: add `GROQ_MODEL` to choose a specific model.
-4. Redeploy.
-
-Never commit the API key to the repository.
-
 ## What I would do with real data
 
 1. Train the recovery model on historical declines and measure the lift with an A/B holdout.
