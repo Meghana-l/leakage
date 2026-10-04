@@ -29,10 +29,10 @@ module.exports = async (req, res) => {
 
   let body = req.body || {};
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
-  if (JSON.stringify(body).length > 80000) return res.status(413).json({ error: 'Request too large' });
+  if (JSON.stringify(body).length > 400000) return res.status(413).json({ error: 'Request too large' });
   const { messages } = body;
   const tools = Array.isArray(body.tools) ? body.tools : [];
-  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 40) return res.status(400).json({ error: 'Bad messages' });
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 80) return res.status(400).json({ error: 'Bad messages' });
 
   const clean = messages.filter(m => m && ROLES.has(m.role)).map(m => {
     const o = { role: m.role, content: typeof m.content === 'string' ? m.content : '' };
