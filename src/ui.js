@@ -217,7 +217,7 @@ const AI = [
   {kind:'Prediction model', c:'p-go', name:'Smart recovery', what:'Scores every way to recover a failed payment and picks the best order to try them.', tech:'Scores each option from the decline reason, payment method, and rider history. Here it is a hand-tuned scoring table; with real data it becomes a trained model (gradient-boosted trees).'},
   {kind:'Rules engine', c:'p-n', name:'Money matching', what:'Compares every charge with what each provider actually paid and names the problem.', tech:'Deterministic matching with tolerances (for example, rounding under 10 cents). Rules, not a language model, because money records must be exact and repeatable.'},
   {kind:'Risk scoring', c:'p-go', name:'Collections priority', what:'Ranks unpaid accounts by how much money is likely lost if nobody acts.', tech:'Amount times the chance it stays unpaid times how late it is. Disputes and fraud skip the queue and go to a person.'},
-  {kind:'Language model', c:'p-ok', name:'Assistant and messages', what:'Answers questions about the week and writes friendly reminder messages.', tech:'Claude with tool calling: it can only read data through six tools and suggest actions through one. It never sees or moves money directly.'},
+  {kind:'Language model', c:'p-ok', name:'Assistant and messages', what:'Answers questions about the week and writes friendly reminder messages.', tech:'A language model with tool calling (Claude inside Claude, Llama on Groq on the web). It can only read data through five lookup tools and suggest actions through one. It never moves money.'},
   {kind:'Safety layer', c:'p-warn', name:'Guardrails and approval', what:'Stops unsafe actions and sends risky ones to a person.', tech:'Hard rules checked on every action: no retries on dead or stolen cards, at most 3 attempts, refunds over $100 and write-offs over $25 need approval.'},
   {kind:'Testing', c:'p-n', name:'Evals', what:'A fixed set of tricky cases the logic must pass before any change ships.', tech:`${18} golden cases covering recovery, matching, and safety rules. Run them below.`},
 ];
@@ -251,7 +251,7 @@ function errText(e){ return ({not_granted:'AI access was turned off for this pag
 function bubble(cls, text, before){ const d=document.createElement('div'); d.className=cls; d.textContent=text; const chat=$('#chat'); before?chat.insertBefore(d,before):chat.appendChild(d); chat.scrollTop=chat.scrollHeight; return d; }
 function welcome(){
   $('#chat').innerHTML='';
-  bubble('b ai', !cpReady ? 'Connecting to Claude...' : sampleFn ? 'Hi! I can look up anything in this week\'s payments and suggest fixes. I never move money myself; you approve everything. Try one of these:' : 'The assistant runs on Claude, so it works when this page is opened inside Claude. Everything else on the page works without it.');
+  bubble('b ai', !cpReady ? 'Connecting...' : sampleFn ? 'Hi! I can look up anything in this week\'s payments and suggest fixes. I never move money myself; you approve everything. Try one of these:' : 'The assistant is not connected on this copy of the page. Everything else works without it.');
   if(sampleFn){ const w=document.createElement('div'); w.className='starters'; w.innerHTML=STARTERS.map(s=>`<button>${esc(s.q)}<span>${esc(s.s)}</span></button>`).join(''); $('#chat').appendChild(w); w.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>ask(STARTERS[i].q)); }
 }
 async function ask(q){
@@ -267,6 +267,46 @@ async function ask(q){
   finally{ $('#send').disabled=false; $('#stop').hidden=true; }
 }
 
+// ---- web fallback: Groq via our own /api/chat (key stays on the server) ----
+let cpBackend = null;
+async function groqSample(input, opts={}){
+  const msgs = typeof input==='string' ? [{role:'user', content:input}] : input.map(m=>({role:m.role, content:m.content}));
+  // our rules message becomes a proper system message
+  if(msgs[0] && msgs[0].content===RULES){ msgs.splice(0,2,{role:'system', content:RULES}); }
+  const tools = opts.tools||[];
+  const toolDefs = tools.map(t=>({type:'function', function:{name:t.name, description:t.description, parameters:t.inputSchema||{type:'object',properties:{}}}}));
+  for(let round=0; round<6; round++){
+    let r;
+    try{ r = await fetch('/api/chat',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({messages:msgs, tools:toolDefs}), signal:opts.signal}); }
+    catch(e){ throw {code: e.name==='AbortError'?'cancelled':'error'}; }
+    if(r.status===429) throw {code:'rate_limited'};
+    if(!r.ok) throw {code:'error'};
+    const m = (await r.json()).message || {};
+    if(m.tool_calls && m.tool_calls.length){
+      msgs.push({role:'assistant', content:m.content||'', tool_calls:m.tool_calls});
+      for(const tc of m.tool_calls){
+        const t = tools.find(x=>x.name===tc.function?.name);
+        let out;
+        try{ const args = JSON.parse(tc.function.arguments||'{}'); out = t ? await t.execute(args) : {error:'Unknown tool'}; }
+        catch(e){ out = {error:String(e?.message||e)}; }
+        msgs.push({role:'tool', tool_call_id:tc.id, content:JSON.stringify(out)});
+      }
+      continue;
+    }
+    const text = m.content || '';
+    opts.onText?.({text});
+    return {text};
+  }
+  throw {code:'error'};
+}
+async function connectAssistant(){
+  // 1) Inside Claude: use Claude through the viewer's account
+  try{ if(window.claude){ const f = await window.claude.use('sample'); if(f){ cpBackend='Claude'; return f; } } }catch(e){}
+  // 2) On the web (Vercel): use our Groq function if it is configured
+  try{ const r = await fetch('/api/chat'); if(r.ok){ const j = await r.json(); if(j.configured){ cpBackend='Groq'; return groqSample; } } }catch(e){}
+  return null;
+}
+
 // ---- wire up ----
 document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>setSeg(b.dataset.k));
 $('#vol').onchange=build;
@@ -276,9 +316,9 @@ $('#stop').onclick=()=>ctl?.abort();
 $('#askbox').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ask($('#askbox').value);} };
 renderAI(); build(); welcome();
 (async()=>{
-  try{ sampleFn = window.claude ? await window.claude.use('sample') : null; }catch(e){ sampleFn=null; }
+  sampleFn = await connectAssistant();
   cpReady=true;
-  $('#cpstatus').textContent = sampleFn ? 'Online, powered by Claude' : 'Available inside Claude';
+  $('#cpstatus').textContent = sampleFn ? (cpBackend==='Claude' ? 'Online, powered by Claude' : 'Online, powered by Llama on Groq') : 'Not connected';
   $('#send').disabled = !sampleFn; $('#askbox').disabled = !sampleFn;
   welcome(); if(segK==='unpaid') renderFix();
 })();
