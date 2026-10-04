@@ -225,7 +225,7 @@ function renderAI(){ $('#aigrid').innerHTML = AI.map(a=>`<div class="card aic"><
 
 // ---- assistant ----
 let sampleFn=null, turns=[], ctl=null, cpReady=false;
-const RULES = `You are the Leakage assistant: a friendly helper for a car company's payments team (Robotaxi rides, Supercharging, subscriptions, service). All data is a simulated week. Always use tools for numbers; never invent them. You can only SUGGEST actions with suggest_action; a person approves them, so never say something was done. Write like a helpful colleague: plain words, short paragraphs, lead with the answer, use USD. No markdown headers or tables. If a safety rule blocks something, say so kindly in one line and offer a safe alternative.`;
+const RULES = `You are the Leakage assistant: a friendly helper for a car company's payments team (Robotaxi rides, Supercharging, subscriptions, service). All data is a simulated week. Always use tools for numbers; never invent them. You can only SUGGEST actions with suggest_action; a person approves them, so never say something was done. Write like a helpful colleague: plain words, short paragraphs, lead with the answer, use USD. No markdown headers or tables. If a safety rule blocks something, say so kindly in one line and offer a safe alternative. Use as few tool calls as you need (usually 1 to 3); prefer one call with group_by over many separate calls. Only suggest an action when the person asks for one.`;
 const TOOL_NAMES = {get_summary:'Checked the weekly summary', find_failed_payments:'Looked through failed payments', get_payment:'Opened a payment', list_mismatches:'Checked money mismatches', list_unpaid:'Checked unpaid accounts', suggest_action:'Sent a suggestion for your OK'};
 const TOOLS = () => [
   {name:'get_summary', description:'Totals for the week.', inputSchema:{type:'object',properties:{}}, execute:()=>{ const k=S.k; return {billed_usd:Math.round(k.billed), payments:S.data.txns.length, failed_usd:Math.round(k.failed), failed_count:k.nFailed, recovered_usd:Math.round(k.smart), plain_retry_recovered_usd:Math.round(k.naive), plain_retry_rule_violations:k.viol, unpaid_riders_usd:Math.round(k.unpaidRiders), overdue_partner_invoices_usd:Math.round(k.partnerUsd), mismatches:k.nBreaks, mismatch_usd:Math.round(k.mis), waiting_for_approval:approvals.filter(a=>a.status==='pending').length}; }},
@@ -275,15 +275,19 @@ async function groqSample(input, opts={}){
   if(msgs[0] && msgs[0].content===RULES){ msgs.splice(0,2,{role:'system', content:RULES}); }
   const tools = opts.tools||[];
   const toolDefs = tools.map(t=>({type:'function', function:{name:t.name, description:t.description, parameters:t.inputSchema||{type:'object',properties:{}}}}));
-  for(let round=0; round<6; round++){
+  const MAX_ROUNDS = 10;
+  for(let round=0; round<MAX_ROUNDS; round++){
+    const last = round===MAX_ROUNDS-1;
+    // final round: no tools, so the model must answer with what it has
+    const body = last ? {messages:[...msgs, {role:'system', content:'Stop looking things up. Answer now using what you found.'}], tools:[]} : {messages:msgs, tools:toolDefs};
     let r;
-    try{ r = await fetch('/api/chat',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({messages:msgs, tools:toolDefs}), signal:opts.signal}); }
+    try{ r = await fetch('/api/chat',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal:opts.signal}); }
     catch(e){ throw {code: e.name==='AbortError'?'cancelled':'error'}; }
     let j = {}; try{ j = await r.json(); }catch(e){}
     if(r.status===429) throw {code:'rate_limited'};
     if(!r.ok) throw {code:'error', detail: j.error || ('HTTP '+r.status)};
     const m = j.message || {};
-    if(m.tool_calls && m.tool_calls.length){
+    if(m.tool_calls && m.tool_calls.length && !last){
       msgs.push({role:'assistant', content:m.content||'', tool_calls:m.tool_calls});
       for(const tc of m.tool_calls){
         const t = tools.find(x=>x.name===tc.function?.name);
@@ -298,7 +302,7 @@ async function groqSample(input, opts={}){
     opts.onText?.({text});
     return {text};
   }
-  throw {code:'error'};
+  throw {code:'error', detail:'The assistant ran out of steps.'};
 }
 async function connectAssistant(){
   // 1) Inside Claude: use Claude through the viewer's account
